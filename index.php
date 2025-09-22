@@ -1,13 +1,33 @@
 <?php
+session_start();
+
 require 'db.php';
+
+// Generate CSRF token if not set
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $comment_text = trim($_POST['comment_text'] ?? '');
+    $token = $_POST['csrf_token'] ?? '';
+
+    // Validate CSRF token
+    if (!hash_equals($_SESSION['csrf_token'], $token)) {
+        die('CSRF token validation failed');
+    }
 
     if ($username && $comment_text) {
-        $sql = "INSERT INTO comments (username, comment_text) VALUES ('$username', '$comment_text')";
-        mysqli_query($mysqli, $sql);
+        // SQL Injection safe: PDO prepared statement
+        $sql = "INSERT INTO comments (username, comment_text) VALUES (:username, :comment_text)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':username'     => $username,
+            ':comment_text' => $comment_text,
+        ]);
+
+        // Redirect to prevent form resubmission
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
@@ -15,15 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$res = mysqli_query($mysqli, "SELECT * FROM comments ORDER BY created_at DESC");
-$comments = mysqli_fetch_all($res, MYSQLI_ASSOC);
+// Fetch all comments
+$stmt = $pdo->query("SELECT * FROM comments ORDER BY created_at DESC");
+$comments = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Vulnerable Comment App (mysqli)</title>
+    <title>Comment App (SQLi + XSS + CSRF Fixed)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -51,10 +72,12 @@ $comments = mysqli_fetch_all($res, MYSQLI_ASSOC);
     <h2>Leave a Comment</h2>
 
     <?php if (!empty($error)) : ?>
-        <p class="error"><?= $error ?></p>
+        <p class="error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
     <?php endif; ?>
 
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+
         <label>Username:</label><br>
         <input type="text" name="username" required><br><br>
 
@@ -68,9 +91,9 @@ $comments = mysqli_fetch_all($res, MYSQLI_ASSOC);
     <?php if ($comments): ?>
         <?php foreach ($comments as $comment): ?>
             <div class="comment">
-                <strong><?= $comment['username'] ?></strong>
-                <em>(<?= $comment['created_at'] ?>)</em>
-                <p><?= $comment['comment_text'] ?></p>
+                <strong><?= htmlspecialchars($comment['username'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
+                <em>(<?= htmlspecialchars($comment['created_at'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)</em>
+                <p><?= nl2br(htmlspecialchars($comment['comment_text'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) ?></p>
             </div>
         <?php endforeach; ?>
     <?php else: ?>
