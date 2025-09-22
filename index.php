@@ -6,8 +6,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $comment_text = trim($_POST['comment_text'] ?? '');
 
     if ($username && $comment_text) {
-        $sql = "INSERT INTO comments (username, comment_text) VALUES ('$username', '$comment_text')";
-        mysqli_query($mysqli, $sql);
+        $sql = "INSERT INTO comments (username, comment_text) VALUES (:username, :comment_text)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':username'     => $username,
+            ':comment_text' => $comment_text,
+        ]);
+
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
@@ -15,9 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$res = mysqli_query($mysqli, "SELECT * FROM comments ORDER BY created_at DESC");
-$comments = mysqli_fetch_all($res, MYSQLI_ASSOC);
+$stmt = $pdo->query("SELECT * FROM comments ORDER BY created_at DESC");
+$comments = $stmt->fetchAll();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
