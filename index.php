@@ -1,11 +1,25 @@
 <?php
+session_start();
+
 require 'db.php';
+
+// Generate CSRF token if not set
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $comment_text = trim($_POST['comment_text'] ?? '');
+    $token = $_POST['csrf_token'] ?? '';
+
+    // Validate CSRF token
+    if (!hash_equals($_SESSION['csrf_token'], $token)) {
+        die('CSRF token validation failed');
+    }
 
     if ($username && $comment_text) {
+        // SQL Injection safe: PDO prepared statement
         $sql = "INSERT INTO comments (username, comment_text) VALUES (:username, :comment_text)";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
@@ -13,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':comment_text' => $comment_text,
         ]);
 
+        // Redirect to prevent form resubmission
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
@@ -20,16 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Fetch all comments
 $stmt = $pdo->query("SELECT * FROM comments ORDER BY created_at DESC");
 $comments = $stmt->fetchAll();
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Vulnerable Comment App (mysqli)</title>
+    <title>Comment App (SQLi + XSS + CSRF Fixed)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -61,6 +76,8 @@ $comments = $stmt->fetchAll();
     <?php endif; ?>
 
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+
         <label>Username:</label><br>
         <input type="text" name="username" required><br><br>
 
@@ -74,7 +91,6 @@ $comments = $stmt->fetchAll();
     <?php if ($comments): ?>
         <?php foreach ($comments as $comment): ?>
             <div class="comment">
-                <!-- Escape all output to prevent XSS -->
                 <strong><?= htmlspecialchars($comment['username'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
                 <em>(<?= htmlspecialchars($comment['created_at'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)</em>
                 <p><?= nl2br(htmlspecialchars($comment['comment_text'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) ?></p>
