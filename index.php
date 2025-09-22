@@ -57,7 +57,7 @@ $comments = $stmt->fetchAll();
     <h2>Leave a Comment</h2>
 
     <?php if (!empty($error)) : ?>
-        <p class="error"><?= $error ?></p>
+        <p class="error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
     <?php endif; ?>
 
     <form method="POST">
@@ -74,9 +74,10 @@ $comments = $stmt->fetchAll();
     <?php if ($comments): ?>
         <?php foreach ($comments as $comment): ?>
             <div class="comment">
-                <strong><?= $comment['username'] ?></strong>
-                <em>(<?= $comment['created_at'] ?>)</em>
-                <p><?= $comment['comment_text'] ?></p>
+                <!-- Escape all output to prevent XSS -->
+                <strong><?= htmlspecialchars($comment['username'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
+                <em>(<?= htmlspecialchars($comment['created_at'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)</em>
+                <p><?= nl2br(htmlspecialchars($comment['comment_text'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) ?></p>
             </div>
         <?php endforeach; ?>
     <?php else: ?>
